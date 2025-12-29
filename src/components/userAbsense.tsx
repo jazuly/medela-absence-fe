@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import React from "react";
 import {
   Table,
@@ -28,9 +28,14 @@ interface User {
 }
 
 export default function UserAbsensePage() {
-  const { userId } = useParams<{ userId: string }>();
   const [user, setUser] = React.useState<User | null>(null);
   const [absense, setAbsense] = React.useState<Absense[] | []>([]);
+  const userStorage = JSON.parse(localStorage.getItem("user") || "");
+  const token = localStorage.getItem("token");
+  const isAdmin = localStorage.getItem("isAdmin");
+  if (!user) {
+    setUser(userStorage);
+  }
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 2);
   const formatDate = (date: Date) => date.toISOString().split("T")[0];
@@ -43,31 +48,38 @@ export default function UserAbsensePage() {
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   const fetchUser = React.useCallback(async () => {
-    if (!userId) return;
+    if (!userStorage.id) return;
     try {
-      const res = await fetch(`${API_URL}/user/${userId}`);
+      const res = await fetch(`${API_URL}/user/${userStorage.id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const response = await res.json();
       setUser(response.data);
     } catch (err) {
       console.error(err);
     }
-  }, [userId, API_URL]);
+  }, [userStorage.id, API_URL, token]);
 
   const fetchAbsense = React.useCallback(async () => {
-    if (!userId) return;
+    if (!userStorage.id) return;
     try {
-        const query = new URLSearchParams({ startDate, endDate });
-      const res = await fetch(`${API_URL}/absence/${userId}?${query.toString()}`);
+      const query = new URLSearchParams({ startDate, endDate });
+      const res = await fetch(
+        `${API_URL}/absence/${userStorage.id}?${query.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       const response = await res.json();
       setAbsense(response.data);
     } catch (err) {
       console.error(err);
     }
-  }, [userId, API_URL, startDate, endDate]);
-
-  React.useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
+  }, [userStorage.id, API_URL, startDate, endDate, token]);
 
   React.useEffect(() => {
     if (startDate && endDate) {
@@ -77,10 +89,11 @@ export default function UserAbsensePage() {
 
   const handleAbsence = async () => {
     try {
-      const res = await fetch(`${API_URL}/absence/${userId}`, {
+      const res = await fetch(`${API_URL}/absence/${userStorage.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -120,33 +133,54 @@ export default function UserAbsensePage() {
     <div className="max-w-3xl mx-auto mt-10">
       <Card>
         <CardHeader>
-          <CardTitle>{user.nama}'s Absense</CardTitle>
+          <CardTitle>
+            <div className="flex justify-between items-center">
+              <span>{user.nama}'s Absense</span>
+              {isAdmin !== "true" && (
+                <Button
+                  className="mr-2"
+                  variant="default"
+                  onClick={() => navigate(`/${user.id}/profile`)}
+                >
+                  Profile
+                </Button>
+              )}
+            </div>
+          </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center space-y-6">
           <Avatar className="w-28 h-28">
-            <AvatarImage src={`${import.meta.env.VITE_S3_URL}/${user.foto}`} alt="User Avatar" />
+            <AvatarImage
+              src={`${import.meta.env.VITE_S3_URL}/${user.foto}`}
+              alt="User Avatar"
+            />
             <AvatarFallback>{user.nama.charAt(0)}</AvatarFallback>
           </Avatar>
 
           <div className="flex space-x-6">
             <div className="flex flex-col items-center text-sm">
-              <span className="font-semibold">Login</span>
+              <span className="font-semibold">Check In</span>
               <span>{formatTime(currentAbsense?.login || null)}</span>
             </div>
             <div className="flex flex-col items-center text-sm">
-              <span className="font-semibold">Logout</span>
+              <span className="font-semibold">Check Out</span>
               <span>{formatTime(currentAbsense?.logout || null)}</span>
             </div>
           </div>
-
-          <Button
-            size="lg"
-            variant="default"
-            disabled={isDoneAbsense}
-            onClick={handleAbsence}
-          >
-            {isDoneAbsense ? "Absense" : currentAbsense ? "Logout" : "Login"}
-          </Button>
+          {isAdmin !== "true" && (
+            <Button
+              size="lg"
+              variant="default"
+              disabled={isDoneAbsense}
+              onClick={handleAbsence}
+            >
+              {isDoneAbsense
+                ? "Absense"
+                : currentAbsense
+                ? "Check Out"
+                : "Check In"}
+            </Button>
+          )}
 
           <div className="w-full">
             <div className="flex justify-between items-center mb-2">
@@ -169,8 +203,8 @@ export default function UserAbsensePage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Login</TableHead>
-                    <TableHead>Logout</TableHead>
+                    <TableHead>Check In</TableHead>
+                    <TableHead>Check Out</TableHead>
                     <TableHead>Duration</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -194,7 +228,9 @@ export default function UserAbsensePage() {
                               {new Date(user.login).toLocaleString()}
                             </TableCell>
                             <TableCell>
-                              {user.logout ? new Date(user.logout).toLocaleString() : '-'}
+                              {user.logout
+                                ? new Date(user.logout).toLocaleString()
+                                : "-"}
                             </TableCell>
                             <TableCell>
                               {formatDuration(user.login, user.logout)}
@@ -210,9 +246,15 @@ export default function UserAbsensePage() {
           </div>
 
           <div className="w-full flex justify-end">
-            <Button variant="outline" onClick={() => navigate("/")}>
-              Back
-            </Button>
+            {isAdmin !== "true" ? (
+              <Button variant="destructive" onClick={() => navigate("/login")}>
+                Logout
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => navigate("/")}>
+                Back
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

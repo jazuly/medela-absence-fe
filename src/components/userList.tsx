@@ -41,14 +41,17 @@ export default function UserList() {
     posisi: string;
     noHp: string;
     foto: File | null;
+    password: string;
   }>({
     nama: "",
     email: "",
     posisi: "",
     noHp: "",
     foto: null,
+    password: "",
   });
   const navigate = useNavigate();
+  const token = localStorage.getItem("token");
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -56,7 +59,11 @@ export default function UserList() {
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_URL}/user`);
+        const res = await fetch(`${API_URL}/user`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         if (!res.ok) throw new Error("Failed to fetch users");
         const data: User[] = (await res.json()).data;
         setUsers(data);
@@ -68,12 +75,12 @@ export default function UserList() {
     };
 
     fetchUsers();
-  }, [API_URL]);
+  }, [API_URL, token]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setNewUser({ ...newUser, foto: file })
+      setNewUser({ ...newUser, foto: file });
       setAvatarPreview(URL.createObjectURL(file));
     }
   };
@@ -85,6 +92,7 @@ export default function UserList() {
       formData.append("email", newUser.email);
       formData.append("posisi", newUser.posisi);
       formData.append("noHp", newUser.noHp);
+      formData.append("password", newUser.password);
 
       if (newUser.foto) {
         formData.append("foto", newUser.foto);
@@ -93,6 +101,9 @@ export default function UserList() {
       const res = await fetch(`${API_URL}/user`, {
         method: "POST",
         body: formData,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (!res.ok) {
@@ -111,6 +122,7 @@ export default function UserList() {
         posisi: "",
         noHp: "",
         foto: null,
+        password: '',
       });
       setOpen(false);
     } catch (error) {
@@ -195,6 +207,18 @@ export default function UserList() {
                       }
                     />
                   </div>
+
+                  <div>
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      value={newUser.password}
+                      type="password"
+                      onChange={(e) =>
+                        setNewUser({ ...newUser, password: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-6 flex justify-end gap-2">
@@ -264,6 +288,11 @@ export default function UserList() {
               </TableBody>
             </Table>
           )}
+          <div className="w-full flex justify-end mt-3">
+            <Button variant="destructive" onClick={() => navigate("/login")}>
+              Logout
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

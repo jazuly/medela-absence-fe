@@ -32,17 +32,24 @@ export default function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
   const [updateUser, setUpdateUser] = React.useState<{
     noHp: string;
+    password: string;
     foto: File | null;
   }>({
     noHp: "",
+    password: "",
     foto: null,
   });
   const navigate = useNavigate();
+  const token = localStorage.getItem("token");
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   React.useEffect(() => {
     if (userId) {
-      fetch(`${API_URL}/user/${userId}`)
+      fetch(`${API_URL}/user/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
         .then((res) => res.json())
         .then((response) => {
           setUser(response.data);
@@ -51,19 +58,20 @@ export default function ProfilePage() {
           );
           setUpdateUser({
             noHp: response.data.noHp,
+            password: "",
             foto: null,
           });
         })
         .catch(console.error);
     }
-  }, [userId, API_URL]);
+  }, [userId, API_URL, token]);
 
   if (!user) return <p>Loading...</p>;
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setUpdateUser({ ...updateUser, foto: file })
+      setUpdateUser({ ...updateUser, foto: file });
       setAvatarPreview(URL.createObjectURL(file));
     }
   };
@@ -72,6 +80,7 @@ export default function ProfilePage() {
     try {
       const formData = new FormData();
       formData.append("noHp", updateUser.noHp);
+      formData.append("password", updateUser.password);
 
       if (updateUser.foto) {
         formData.append("foto", updateUser.foto);
@@ -80,6 +89,9 @@ export default function ProfilePage() {
       const res = await fetch(`${API_URL}/user/${userId}`, {
         method: "PUT",
         body: formData,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (!res.ok) {
@@ -90,6 +102,7 @@ export default function ProfilePage() {
 
       setUpdateUser({
         noHp: updateUser.noHp,
+        password: "",
         foto: null,
       });
     } catch (error) {
@@ -148,6 +161,18 @@ export default function ProfilePage() {
             <div>
               <Label htmlFor="position">Position</Label>
               <Input id="position" defaultValue={user.posisi} disabled />
+            </div>
+
+            <div>
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={updateUser.password}
+                onChange={(e) =>
+                  setUpdateUser({ ...updateUser, password: e.target.value })
+                }
+              />
             </div>
           </div>
 
