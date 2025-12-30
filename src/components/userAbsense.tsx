@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import React from "react";
 import {
   Table,
@@ -12,27 +12,22 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
-
-interface Absense {
-  id: string;
-  login: string;
-  logout: string | null;
-  userId: string;
-}
-
-interface User {
-  id: string;
-  nama: string;
-  foto: string;
-  absenses: Absense[];
-}
+import type { AbsenseInterface, UserInterface } from "@/interface";
+import { useUser } from "@/hooks/useUser";
+import { useAbsense } from "@/hooks/useAbsense";
 
 export default function UserAbsensePage() {
-  const [user, setUser] = React.useState<User | null>(null);
-  const [absense, setAbsense] = React.useState<Absense[] | []>([]);
+  const { userId } = useParams<{ userId: string }>();
+  const [isInit, setInit] = React.useState<boolean>(true);
+  const [isInitUser, setInitUser] = React.useState<boolean>(true);
+  const [isLoadByDate, setLoadByDate] = React.useState<boolean>(false);
+  const [user, setUser] = React.useState<UserInterface | null>(null);
+  const [absense, setAbsense] = React.useState<AbsenseInterface[] | []>([]);
   const userStorage = JSON.parse(localStorage.getItem("user") || "");
-  const token = localStorage.getItem("token");
+  const { detailUser } = useUser();
+  const { listAbsenseUser, absenseUser, error: absError } = useAbsense();
   const isAdmin = localStorage.getItem("isAdmin");
+  const idUser = userId ?? userStorage.id
   if (!user) {
     setUser(userStorage);
   }
@@ -45,65 +40,58 @@ export default function UserAbsensePage() {
   );
   const [endDate, setEndDate] = React.useState<string>(formatDate(today));
   const navigate = useNavigate();
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   const fetchUser = React.useCallback(async () => {
-    if (!userStorage.id) return;
-    try {
-      const res = await fetch(`${API_URL}/user/${userStorage.id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const response = await res.json();
-      setUser(response.data);
-    } catch (err) {
-      console.error(err);
+    if (!idUser) return;
+
+    if (isInitUser) {
+      const data = await detailUser(idUser);
+      setUser(data);
+      setInitUser(false);
     }
-  }, [userStorage.id, API_URL, token]);
+  }, [detailUser, idUser, isInitUser]);
 
   const fetchAbsense = React.useCallback(async () => {
-    if (!userStorage.id) return;
-    try {
+    if (!idUser) return;
+
+    if (isInit || isLoadByDate) {
       const query = new URLSearchParams({ startDate, endDate });
-      const res = await fetch(
-        `${API_URL}/absence/${userStorage.id}?${query.toString()}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const response = await res.json();
-      setAbsense(response.data);
-    } catch (err) {
-      console.error(err);
+      const data = await listAbsenseUser(idUser, query.toString());
+
+      if (!absError) {
+        setAbsense(data);
+      }
+
+      setInit(false);
+      setLoadByDate(false);
     }
-  }, [userStorage.id, API_URL, startDate, endDate, token]);
+  }, [
+    idUser,
+    startDate,
+    endDate,
+    absError,
+    listAbsenseUser,
+    isInit,
+    isLoadByDate,
+  ]);
 
   React.useEffect(() => {
-    if (startDate && endDate) {
-      fetchAbsense();
+    fetchAbsense();
+  }, [fetchAbsense, startDate, endDate]);
+
+  React.useEffect(() => {
+    if (userId) {
+      fetchUser();
     }
-  }, [startDate, endDate, fetchAbsense]);
+  }, [fetchUser, userId]);
 
   const handleAbsence = async () => {
-    try {
-      const res = await fetch(`${API_URL}/absence/${userStorage.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) throw new Error("Failed to update absense");
-
-      // re-fetch users to update UI
-      fetchUser();
+    await absenseUser(idUser);
+    if (!absError) {
+      setInit(true);
+      setInitUser(true);
+      await fetchUser();
       fetchAbsense();
-    } catch (err) {
-      console.error("Absense error:", err);
     }
   };
 
@@ -189,13 +177,17 @@ export default function UserAbsensePage() {
                 <Input
                   type="date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => (
+                    setStartDate(e.target.value), setLoadByDate(true)
+                  )}
                 />
                 <span> - </span>
                 <Input
                   type="date"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  onChange={(e) => (
+                    setEndDate(e.target.value), setLoadByDate(true)
+                  )}
                 />
               </div>
             </div>

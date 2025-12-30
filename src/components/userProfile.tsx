@@ -7,29 +7,16 @@ import { Button } from "@/components/ui/button";
 
 import { useParams, useNavigate } from "react-router-dom";
 import React from "react";
-
-interface Absense {
-  id: string;
-  login: string;
-  logout: string | null;
-  userId: string;
-}
-
-interface User {
-  id: string;
-  nama: string;
-  email: string;
-  foto: string;
-  posisi: string;
-  noHp: string;
-  absenses: Absense[];
-}
+import { useUser } from "@/hooks/useUser";
+import type { UserInterface } from "@/interface";
 
 export default function ProfilePage() {
+  const [isInit, setInit] = React.useState<boolean>(true);
   const { userId } = useParams<{ userId: string }>();
-  const [user, setUser] = React.useState<User | null>(null);
+  const [user, setUser] = React.useState<UserInterface | null>(null);
   //   const [avatarFile, setAvatarFile] = React.useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
+  const { detailUser, updateUser: updateUserApi, error, loading } = useUser();
   const [updateUser, setUpdateUser] = React.useState<{
     noHp: string;
     password: string;
@@ -40,31 +27,28 @@ export default function ProfilePage() {
     foto: null,
   });
   const navigate = useNavigate();
-  const token = localStorage.getItem("token");
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   React.useEffect(() => {
-    if (userId) {
-      fetch(`${API_URL}/user/${userId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-        .then((res) => res.json())
-        .then((response) => {
-          setUser(response.data);
-          setAvatarPreview(
-            `${import.meta.env.VITE_S3_URL}/${response.data.foto}`
-          );
-          setUpdateUser({
-            noHp: response.data.noHp,
-            password: "",
-            foto: null,
-          });
-        })
-        .catch(console.error);
-    }
-  }, [userId, API_URL, token]);
+    if (!userId || !isInit) return;
+
+    const fetchUser = async () => {
+      const data = await detailUser(userId);
+
+      if (!error) {
+        setUser(data);
+        setAvatarPreview(`${import.meta.env.VITE_S3_URL}/${data.foto}`);
+        setUpdateUser({
+          noHp: data.noHp,
+          password: "",
+          foto: null,
+        });
+      }
+
+      setInit(false);
+    };
+
+    fetchUser();
+  }, [detailUser, userId, error, isInit]);
 
   if (!user) return <p>Loading...</p>;
 
@@ -78,27 +62,11 @@ export default function ProfilePage() {
 
   const handleUpdateUser = async () => {
     try {
-      const formData = new FormData();
-      formData.append("noHp", updateUser.noHp);
-      formData.append("password", updateUser.password);
-
-      if (updateUser.foto) {
-        formData.append("foto", updateUser.foto);
-      }
-
-      const res = await fetch(`${API_URL}/user/${userId}`, {
-        method: "PUT",
-        body: formData,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      updateUserApi(userId as string, {
+        noHp: updateUser.noHp,
+        password: updateUser.password,
+        foto: updateUser.foto,
       });
-
-      if (!res.ok) {
-        throw new Error("Failed to add user");
-      }
-
-      await res.json();
 
       setUpdateUser({
         noHp: updateUser.noHp,
@@ -177,10 +145,16 @@ export default function ProfilePage() {
           </div>
 
           <div className="mt-6 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => navigate("/")}>
+            <Button
+              variant="outline"
+              disabled={loading}
+              onClick={() => navigate("/")}
+            >
               Back
             </Button>
-            <Button onClick={handleUpdateUser}>Save</Button>
+            <Button disabled={loading} onClick={handleUpdateUser}>
+              {loading ? "Saving..." : "Save"}
+            </Button>
           </div>
         </CardContent>
       </Card>

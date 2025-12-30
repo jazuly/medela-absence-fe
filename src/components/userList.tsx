@@ -20,29 +20,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-
-interface User {
-  id: string;
-  nama: string;
-  email: string;
-  foto: string;
-  posisi: string;
-  noHp: string;
-}
+import type { CreateUserInterface, UserInterface } from "@/interface";
+import { useUser } from "@/hooks/useUser";
 
 export default function UserList() {
-  const [users, setUsers] = React.useState<User[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const [isInit, setInit] = React.useState<boolean>(true);
+  const { listUser, createUser, error, loading } = useUser();
+  const [users, setUsers] = React.useState<UserInterface[]>([]);
   const [open, setOpen] = React.useState(false);
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
-  const [newUser, setNewUser] = React.useState<{
-    nama: string;
-    email: string;
-    posisi: string;
-    noHp: string;
-    foto: File | null;
-    password: string;
-  }>({
+  const [newUser, setNewUser] = React.useState<CreateUserInterface>({
     nama: "",
     email: "",
     posisi: "",
@@ -51,31 +38,22 @@ export default function UserList() {
     password: "",
   });
   const navigate = useNavigate();
-  const token = localStorage.getItem("token");
-
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   React.useEffect(() => {
+    if (!isInit) return;
+
     const fetchUsers = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`${API_URL}/user`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!res.ok) throw new Error("Failed to fetch users");
-        const data: User[] = (await res.json()).data;
+      const data = await listUser()
+
+      if (!error) {
         setUsers(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
       }
+
+      setInit(false)
     };
 
     fetchUsers();
-  }, [API_URL, token]);
+  }, [listUser, error, isInit]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -86,36 +64,10 @@ export default function UserList() {
   };
 
   const handleAddUser = async () => {
-    try {
-      const formData = new FormData();
-      formData.append("nama", newUser.nama);
-      formData.append("email", newUser.email);
-      formData.append("posisi", newUser.posisi);
-      formData.append("noHp", newUser.noHp);
-      formData.append("password", newUser.password);
+    const data = await createUser(newUser);
 
-      if (newUser.foto) {
-        formData.append("foto", newUser.foto);
-      }
-
-      const res = await fetch(`${API_URL}/user`, {
-        method: "POST",
-        body: formData,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to add user");
-      }
-
-      const result = await res.json();
-
-      // assuming API returns { data: User }
-      setUsers((prev) => [...prev, result.data]);
-
-      // reset & close modal
+    if (!error) {
+      setUsers((prev) => [...prev, data]);
       setNewUser({
         nama: "",
         email: "",
@@ -125,8 +77,6 @@ export default function UserList() {
         password: '',
       });
       setOpen(false);
-    } catch (error) {
-      console.error(error);
     }
   };
 

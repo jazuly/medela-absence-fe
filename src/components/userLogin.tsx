@@ -4,15 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useUser } from "@/hooks/useUser";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const { loginUser, loading: logLoading, error } = useAuth()
+  const { profileUser, loading: proLoading } = useUser()
   const navigate = useNavigate();
-
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   useEffect(() => {
     localStorage.clear()
@@ -20,38 +21,12 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoading(true);
+    await loginUser({ email, password })
 
-    try {
-      const response = await fetch(`${API_URL}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Login failed");
-      }
-
-      const data: { data: string } = await response.json();
-      fetch(`${API_URL}/user/profile`, {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${data.data}`
-        },
-      }).then((res) => res.json()).then((res) => {
-        localStorage.setItem("user", JSON.stringify(res.data));
-        localStorage.setItem("token", data.data);
-        localStorage.setItem("isAdmin", isAdmin.toString());
-        navigate("/");
-      })
-    } catch (error) {
-      console.error(error);
-      alert("Invalid email or password");
-    } finally {
-      setLoading(false);
+    if (!error) {
+      await profileUser()
+      localStorage.setItem("isAdmin", isAdmin.toString());
+      navigate('/')
     }
   };
 
@@ -104,8 +79,8 @@ export default function LoginPage() {
               </Label>
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Logging in..." : "Login"}
+            <Button type="submit" className="w-full" disabled={logLoading || proLoading}>
+              {logLoading || proLoading ? "Logging in..." : "Login"}
             </Button>
           </form>
         </CardContent>
